@@ -2101,6 +2101,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  expiresAt,
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, map[string]any{
