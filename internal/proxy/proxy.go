@@ -1037,8 +1037,6 @@ func (pm *Manager) getUpdates(ctx context.Context, token string, offset int64, t
 	if len(token) > 8 {
 		maskedToken = token[:8] + "..."
 	}
-	log.Printf("[getUpdates] → Telegram: token=%s offset=%d timeout=%ds limit=100", maskedToken, offset, timeout)
-
 	url := fmt.Sprintf("%s/bot%s/getUpdates", pm.tgAPIBaseURL, token)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
@@ -1069,9 +1067,8 @@ func (pm *Manager) getUpdates(ctx context.Context, token string, offset int64, t
 		return nil, fmt.Errorf("invalid response: %s", string(body[:min(200, len(body))]))
 	}
 
-	log.Printf("[getUpdates] ← Telegram: token=%s ok=%v updates=%d", maskedToken, result.OK, len(result.Result))
-
 	if !result.OK {
+		log.Printf("[getUpdates] ← Telegram: token=%s ok=false error=%d: %s", maskedToken, result.ErrorCode, result.Description)
 		if result.RetryAfter > 0 {
 			return nil, &rateLimitError{
 				After:       time.Duration(result.RetryAfter) * time.Second,
@@ -1079,6 +1076,10 @@ func (pm *Manager) getUpdates(ctx context.Context, token string, offset int64, t
 			}
 		}
 		return nil, fmt.Errorf("API error %d: %s", result.ErrorCode, result.Description)
+	}
+
+	if len(result.Result) > 0 {
+		log.Printf("[getUpdates] ← Telegram: token=%s updates=%d offset=%d", maskedToken, len(result.Result), offset)
 	}
 
 	return result.Result, nil
