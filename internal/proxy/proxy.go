@@ -683,10 +683,7 @@ func (pm *Manager) applyLLMRoutes(botID int64, rawUpdate map[string]any) {
 		return
 	}
 
-	msg, _ := rawUpdate["message"].(map[string]any)
-	if msg == nil {
-		msg, _ = rawUpdate["channel_post"].(map[string]any)
-	}
+	msg := updateMessagePayload(rawUpdate)
 	if msg == nil {
 		return
 	}
@@ -801,10 +798,7 @@ func (pm *Manager) applyRoutes(sourceBotID int64, rawUpdate map[string]any) {
 	var fromID int64
 	var chatID int64
 
-	msg, _ := rawUpdate["message"].(map[string]any)
-	if msg == nil {
-		msg, _ = rawUpdate["channel_post"].(map[string]any)
-	}
+	msg := updateMessagePayload(rawUpdate)
 	if msg == nil {
 		return // no message to route
 	}
@@ -934,7 +928,7 @@ func (pm *Manager) applyRoutes(sourceBotID int64, rawUpdate map[string]any) {
 // applyReverseRoutes checks if a message on a target bot is a reply to a routed message,
 // and if so, sends the reply back via the source bot to the original chat (Source-NAT return path)
 func (pm *Manager) applyReverseRoutes(botID int64, rawUpdate map[string]any) {
-	msg, _ := rawUpdate["message"].(map[string]any)
+	msg := updateMessagePayload(rawUpdate)
 	if msg == nil {
 		return
 	}
@@ -1288,16 +1282,30 @@ func (pm *Manager) ForEachManagedBot(fn func(botID int64, b *bot.Bot)) {
 	}
 }
 
+// messageLikeUpdateKeys are Update JSON keys whose value is a Message object.
+var messageLikeUpdateKeys = []string{
+	"message", "edited_message",
+	"channel_post", "edited_channel_post",
+	"business_message", "edited_business_message",
+	"guest_message",
+}
+
+func updateMessagePayload(rawUpdate map[string]any) map[string]any {
+	for _, key := range messageLikeUpdateKeys {
+		if msg, ok := rawUpdate[key].(map[string]any); ok {
+			return msg
+		}
+	}
+	return nil
+}
+
 // summarizeUpdate creates a short description of an update for logging
 func summarizeUpdate(update map[string]any) string {
 	updateID, _ := update["update_id"].(float64)
 	summary := fmt.Sprintf("update_id=%d", int64(updateID))
 
 	// Message-like update types (contain text, from, chat fields)
-	for _, key := range []string{
-		"message", "edited_message", "channel_post", "edited_channel_post",
-		"business_message", "edited_business_message",
-	} {
+	for _, key := range messageLikeUpdateKeys {
 		if msg, ok := update[key].(map[string]any); ok {
 			summary += " type=" + key
 			if text, ok := msg["text"].(string); ok {

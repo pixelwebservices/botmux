@@ -12,6 +12,27 @@ import (
 )
 
 // makeTextUpdate builds a minimal raw Telegram message update for injection.
+func makeGuestTextUpdate(updateID int, chatID, userID int64, username, text string) map[string]any {
+	return map[string]any{
+		"update_id": float64(updateID),
+		"guest_message": map[string]any{
+			"message_id": float64(updateID * 10),
+			"date":       float64(1700000000 + updateID),
+			"chat": map[string]any{
+				"id":   float64(chatID),
+				"type": "private",
+			},
+			"from": map[string]any{
+				"id":         float64(userID),
+				"is_bot":     false,
+				"username":   username,
+				"first_name": username,
+			},
+			"text": text,
+		},
+	}
+}
+
 func makeTextUpdate(updateID int, chatID, userID int64, username, text string) map[string]any {
 	return map[string]any{
 		"update_id": float64(updateID),
@@ -266,6 +287,119 @@ func TestE2E_Routing(t *testing.T) {
 		chatID := parseChatID(nil, sends[len(sends)-1].body)
 		if chatID != 200 {
 			t.Errorf("R04: expected sendMessage to chat_id=200, got %d", chatID)
+		}
+	})
+
+	// R-05: guest_message payloads participate in rule-based routing
+	t.Run("R05_GuestMessage_Routes", func(t *testing.T) {
+		h := setupE2E(t)
+
+		srcBot := registerAndManage(h, "src05:token", "srcbot05")
+		tgtBot := registerAndManage(h, "tgt05:token", "tgtbot05")
+
+		_, err := h.store.AddRoute(models.Route{
+			SourceBotID:    srcBot,
+			TargetBotID:    tgtBot,
+			ConditionType:  "text",
+			ConditionValue: "guest",
+			Action:         "forward",
+			TargetChatID:   205,
+			Enabled:        true,
+			CreatedAt:      time.Now().Format(time.RFC3339),
+		})
+		if err != nil {
+			t.Fatalf("AddRoute: %v", err)
+		}
+
+		h.InjectUpdate(srcBot, makeGuestTextUpdate(5, 105, 5050, "guest_alice", "hello from guest mode"))
+
+		sends := h.fake.RequestsFor("sendMessage")
+		if len(sends) != 1 {
+			t.Fatalf("R05: expected 1 sendMessage, got %d", len(sends))
+		}
+		chatID := parseChatID(nil, sends[0].body)
+		if chatID != 205 {
+			t.Errorf("R05: expected sendMessage to chat_id=205, got %d", chatID)
+		}
+		_ = tgtBot
+	})
+
+	// R-06: guest_message forward + reverse-NAT reply path
+	t.Run("R06_GuestMessage_ReverseNAT", func(t *testing.T) {
+		h := setupE2E(t)
+
+		srcBot := registerAndManage(h, "src06:token", "srcbot06")
+		tgtBot := registerAndManage(h, "tgt06:token", "tgtbot06")
+
+		routeID, err := h.store.AddRoute(models.Route{
+			SourceBotID:    srcBot,
+			TargetBotID:    tgtBot,
+			SourceChatID:   106,
+			ConditionType:  "text",
+			ConditionValue: "guest_route",
+			Action:         "forward",
+			TargetChatID:   206,
+			Enabled:        true,
+			CreatedAt:      time.Now().Format(time.RFC3339),
+		})
+		if err != nil {
+			t.Fatalf("AddRoute: %v", err)
+		}
+
+		h.InjectUpdate(srcBot, makeGuestTextUpdate(1, 106, 6060, "guest_alice", "please guest_route this"))
+
+		if cnt := h.fake.RequestsCountFor("sendMessage"); cnt == 0 {
+			t.Fatal("R06: expected forward sendMessage from guest_message, got 0")
+		}
+
+		mapping, err := h.store.FindReverseMapping(tgtBot, 206)
+		if err != nil {
+			t.Fatalf("R06: FindReverseMapping: %v — route mapping was not saved", err)
+		}
+		if mapping.SourceBotID != srcBot {
+			t.Errorf("R06: mapping.SourceBotID=%d, want %d", mapping.SourceBotID, srcBot)
+		}
+		if mapping.SourceChatID != 106 {
+			t.Errorf("R06: mapping.SourceChatID=%d, want 106", mapping.SourceChatID)
+		}
+		if mapping.RouteID != routeID {
+			t.Errorf("R06: mapping.RouteID=%d, want %d", mapping.RouteID, routeID)
+		}
+
+		sendsBefore := h.fake.RequestsCountFor("sendMessage")
+		replyUpdate := map[string]any{
+			"update_id": float64(2),
+			"message": map[string]any{
+				"message_id": float64(999),
+				"date":       float64(1700000100),
+				"chat": map[string]any{
+					"id":   float64(206),
+					"type": "private",
+				},
+				"from": map[string]any{
+					"id":       float64(55),
+					"is_bot":   false,
+					"username": "operator",
+				},
+				"text": "reply to guest routed message",
+				"reply_to_message": map[string]any{
+					"message_id": float64(mapping.TargetMsgID),
+				},
+			},
+		}
+		h.InjectUpdate(tgtBot, replyUpdate)
+
+		sendsAfter := h.fake.RequestsCountFor("sendMessage")
+		if sendsAfter <= sendsBefore {
+			t.Fatalf("R06: expected reverse sendMessage, count did not increase (%d → %d)",
+				sendsBefore, sendsAfter)
+		}
+
+		// Last sendMessage should go back to the original guest source chat.
+		sends := h.fake.RequestsFor("sendMessage")
+		chatID := parseChatID(nil, sends[len(sends)-1].body)
+		if chatID != 106 {
+			t.Errorf("R06: expected reverse sendMessage to chat_id=106, got %d", chatID)
 		}
 	})
 }

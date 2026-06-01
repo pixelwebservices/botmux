@@ -14,14 +14,23 @@ import (
 
 // AllowedUpdateTypes is the shared list of update types requested from the Telegram API.
 // Used by both StartPolling (library path) and ProxyManager.getUpdates (raw HTTP path).
+// Kept in sync with github.com/OvyFlash/telegram-bot-api UpdateType* constants (Bot API 10.0).
 var AllowedUpdateTypes = []string{
-	"message", "edited_message",
-	"channel_post", "edited_channel_post",
-	"callback_query",
-	"my_chat_member", "chat_member", "chat_join_request",
-	"business_message", "edited_business_message",
-	"message_reaction",
-	"poll", "poll_answer",
+	tgbotapi.UpdateTypeMessage,
+	tgbotapi.UpdateTypeEditedMessage,
+	tgbotapi.UpdateTypeChannelPost,
+	tgbotapi.UpdateTypeEditedChannelPost,
+	tgbotapi.UpdateTypeCallbackQuery,
+	tgbotapi.UpdateTypeMyChatMember,
+	tgbotapi.UpdateTypeChatMember,
+	tgbotapi.UpdateTypeChatJoinRequest,
+	tgbotapi.UpdateTypeBusinessMessage,
+	tgbotapi.UpdateTypeEditedBusinessMessage,
+	tgbotapi.UpdateTypeGuestMessage,
+	tgbotapi.UpdateTypeManagedBot,
+	tgbotapi.UpdateTypeMessageReaction,
+	tgbotapi.UpdateTypePoll,
+	tgbotapi.UpdateTypePollAnswer,
 }
 
 type Bot struct {
@@ -164,6 +173,13 @@ func (b *Bot) processUpdate(update tgbotapi.Update) {
 	if update.EditedBusinessMessage != nil {
 		b.handleMessage(update.EditedBusinessMessage)
 	}
+	if update.GuestMessage != nil {
+		b.handleMessage(update.GuestMessage)
+	}
+	if update.ManagedBot != nil {
+		log.Printf("Bot [%d] managed_bot update: bot_id=%d user_id=%d",
+			b.botID, update.ManagedBot.Bot.ID, update.ManagedBot.User.ID)
+	}
 	if update.MyChatMember != nil {
 		b.handleMyChatMember(update.MyChatMember)
 	}
@@ -230,42 +246,6 @@ func FormatUsername(user *tgbotapi.User) string {
 	return name
 }
 
-// extractMedia returns media type and file_id from a Telegram message
-func extractMedia(msg *tgbotapi.Message) (mediaType, fileID string) {
-	switch {
-	case len(msg.Photo) > 0:
-		// Pick the largest photo (last in array)
-		mediaType = "photo"
-		fileID = msg.Photo[len(msg.Photo)-1].FileID
-	case msg.Video != nil:
-		mediaType = "video"
-		fileID = msg.Video.FileID
-	case msg.Animation != nil:
-		mediaType = "animation"
-		fileID = msg.Animation.FileID
-	case msg.Sticker != nil:
-		mediaType = "sticker"
-		if msg.Sticker.Thumbnail != nil {
-			fileID = msg.Sticker.Thumbnail.FileID
-		} else {
-			fileID = msg.Sticker.FileID
-		}
-	case msg.Voice != nil:
-		mediaType = "voice"
-		fileID = msg.Voice.FileID
-	case msg.Audio != nil:
-		mediaType = "audio"
-		fileID = msg.Audio.FileID
-	case msg.Document != nil:
-		mediaType = "document"
-		fileID = msg.Document.FileID
-	case msg.VideoNote != nil:
-		mediaType = "video_note"
-		fileID = msg.VideoNote.FileID
-	}
-	return
-}
-
 func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 	b.trackChat(&msg.Chat)
 
@@ -296,7 +276,7 @@ func (b *Bot) handleMessage(msg *tgbotapi.Message) {
 		text = msg.Caption
 	}
 
-	mediaType, fileID := extractMedia(msg)
+	mediaType, fileID := ExtractMedia(msg)
 
 	m := models.Message{
 		ID:        msg.MessageID,
@@ -330,7 +310,7 @@ func (b *Bot) handleChannelPost(msg *tgbotapi.Message) {
 		text = msg.Caption
 	}
 
-	mediaType, fileID := extractMedia(msg)
+	mediaType, fileID := ExtractMedia(msg)
 
 	m := models.Message{
 		ID:        msg.MessageID,

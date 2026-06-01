@@ -412,3 +412,83 @@ func TestE2E_Send_S07_CopyMessage(t *testing.T) {
 		t.Errorf("store: expected Text=%q (copied from source), got %q", srcText, msg.Text)
 	}
 }
+
+// S-08 -----------------------------------------------------------------------
+
+func TestE2E_Send_S08_SendLivePhoto(t *testing.T) {
+	h := setupE2E(t, withHTTPServer())
+
+	token := "s08:livephotobot"
+	botID := h.AddBot(models.BotConfig{
+		Token:       token,
+		Name:        "s08bot",
+		BotUsername: "s08bot",
+	})
+
+	// Fake TG returns Bot API 10.0-like payload with live_photo object.
+	h.fake.SetHandler("sendLivePhoto", func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+
+		chatID := parseChatID(r, bodyBytes)
+		livePhotoID := parseStringParam(r, bodyBytes, "live_photo")
+		if livePhotoID == "" {
+			livePhotoID = "live_photo_file_id"
+		}
+		stillID := parseStringParam(r, bodyBytes, "photo")
+		if stillID == "" {
+			stillID = "live_photo_preview_id"
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]any{
+			"ok": true,
+			"result": map[string]any{
+				"message_id": int64(8001),
+				"date":       int64(1745064480),
+				"chat":       map[string]any{"id": chatID, "type": "private"},
+				"from":       map[string]any{"id": int64(108), "is_bot": true, "username": "s08bot"},
+				"live_photo": map[string]any{
+					"file_id":        livePhotoID,
+					"file_unique_id": "live_unique",
+					"width":          1280,
+					"height":         720,
+					"duration":       3,
+					"photo": []map[string]any{
+						{"file_id": "preview_small"},
+						{"file_id": stillID},
+					},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	const chatID int64 = 100008
+	const livePhotoID = "live_photo_file_id"
+	const stillPreviewID = "live_photo_preview_id"
+
+	status, resp := h.CallTgapi("sendLivePhoto", token, map[string]any{
+		"chat_id":    chatID,
+		"live_photo": livePhotoID,
+		"photo":      stillPreviewID,
+	})
+
+	if status != 200 {
+		t.Fatalf("expected HTTP 200, got %d", status)
+	}
+	if ok, _ := resp["ok"].(bool); !ok {
+		t.Fatalf("expected ok:true, got %v", resp)
+	}
+
+	msg := h.WaitForMessage(botID, chatID, func(m models.Message) bool {
+		return m.MediaType == "live_photo"
+	})
+	if msg.MediaType != "live_photo" {
+		t.Errorf("store: expected MediaType=live_photo, got %q", msg.MediaType)
+	}
+	// For live photos we store preview photo file_id for media rendering.
+	if msg.FileID != stillPreviewID {
+		t.Errorf("store: expected FileID=%q (preview), got %q", stillPreviewID, msg.FileID)
+	}
+}

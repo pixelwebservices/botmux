@@ -48,6 +48,7 @@ func TestUnit_Send_S09_InferTelegramMethodTruthTable(t *testing.T) {
 		want string
 	}{
 		// Known send methods matched by body fields
+		{"live_photo", `{"live_photo":"live_id","photo":"still_id","chat_id":1}`, "sendLivePhoto"},
 		{"photo", `{"photo":"file_id","chat_id":1}`, "sendPhoto"},
 		{"audio", `{"audio":"file_id","chat_id":1}`, "sendAudio"},
 		{"document", `{"document":"file_id","chat_id":1}`, "sendDocument"},

@@ -3512,6 +3512,8 @@ func InferTelegramMethod(body []byte) string {
 		return ""
 	}
 	switch {
+	case params["live_photo"] != nil:
+		return "sendLivePhoto"
 	case params["photo"] != nil:
 		return "sendPhoto"
 	case params["audio"] != nil:
@@ -3559,6 +3561,7 @@ var sendMethods = map[string]bool{
 	"sendVoice":          true,
 	"sendVideoNote":      true,
 	"sendSticker":        true,
+	"sendLivePhoto":      true,
 	"sendLocation":       true,
 	"sendVenue":          true,
 	"sendContact":        true,
@@ -3636,6 +3639,8 @@ func (s *Server) CaptureSentMessage(token, method string, reqBody []byte, conten
 		VideoNote *struct {
 			FileID string `json:"file_id"`
 		} `json:"video_note"`
+		LivePhoto map[string]any `json:"live_photo"`
+		SenderTag string         `json:"sender_tag"`
 	}
 	if err := json.Unmarshal(resp.Result, &msg); err != nil || msg.MessageID == 0 {
 		return
@@ -3654,6 +3659,9 @@ func (s *Server) CaptureSentMessage(token, method string, reqBody []byte, conten
 	// Detect media type and file_id from response
 	var mediaType, fileID string
 	switch {
+	case msg.LivePhoto != nil:
+		mediaType = "live_photo"
+		fileID = bot.LivePhotoFileID(msg.LivePhoto)
 	case len(msg.Photo) > 0:
 		mediaType, fileID = "photo", msg.Photo[len(msg.Photo)-1].FileID
 	case msg.Video != nil:
@@ -3689,6 +3697,7 @@ func (s *Server) CaptureSentMessage(token, method string, reqBody []byte, conten
 		Date:      msg.Date * 1000,
 		MediaType: mediaType,
 		FileID:    fileID,
+		SenderTag: msg.SenderTag,
 	}
 	if err := s.store.SaveMessage(m); err != nil {
 		log.Printf("[tgapi-proxy] Failed to save sent message: %v", err)
