@@ -1,5 +1,8 @@
-image: ghcr.io/skrashevich/botmux:main
+image: agawade1999/botmux:latest
 telegramBotToken: "8317538419:AAGoLkUJvRQCYL0MeaGVm5ave047xN0nz0w"
+
+# cookieSecure: "false" # Set to "false" to allow cookies over HTTP (port-forwarding/local test), "true" to force HTTPS only. Defaults to auto-detection.
+cookieSecure: "false"
 
 persistence:
   size: 1Gi

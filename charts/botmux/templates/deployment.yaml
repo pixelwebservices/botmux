@@ -37,6 +37,10 @@ spec:
             - name: TELEGRAM_BOT_TOKEN
               value: {{ .Values.telegramBotToken | quote }}
             {{- end }}
+            {{- if .Values.cookieSecure }}
+            - name: COOKIE_SECURE
+              value: {{ .Values.cookieSecure | quote }}
+            {{- end }}
           volumeMounts:
             - name: data
               mountPath: /data

@@ -2208,6 +2208,13 @@ func (s *Server) handleBotDescription(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"description": desc})
 }
 
+func (s *Server) isCookieSecure(r *http.Request) bool {
+	if val := os.Getenv("COOKIE_SECURE"); val != "" {
+		return val == "true"
+	}
+	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
 // Auth handlers
 
 // handleLogin authenticates a user and creates a session cookie.
@@ -2265,7 +2272,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  expiresAt,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   s.isCookieSecure(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, map[string]any{
@@ -2292,7 +2299,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   s.isCookieSecure(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, map[string]string{"status": "ok"})

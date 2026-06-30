@@ -13,7 +13,8 @@ helm install botmux ./charts/botmux \
 
 You can customize the deployment in `values.yaml`:
 
-- `image`: The docker image to run (`ghcr.io/skrashevich/botmux:main` by default).
+- `image`: The docker image to run.
 - `telegramBotToken`: Your Telegram bot API token.
+- `cookieSecure`: Set to `"false"` to allow session cookies over plain HTTP (essential for local dev / port forwarding). Leave blank for auto-detection based on request headers (`TLS` / `X-Forwarded-Proto`).
 - `persistence.size`: The storage size for the SQLite database (`1Gi` by default).
 - `persistence.storageClass`: The Kubernetes storage class to use (uses cluster default if empty).
