@@ -1,4 +1,4 @@
-image: ghcr.io/pixelwebservices/botmux:main
+image: ghcr.io/skrashevich/botmux:main
 telegramBotToken: "8317538419:AAGoLkUJvRQCYL0MeaGVm5ave047xN0nz0w"
 
 persistence:
