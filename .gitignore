@@ -1,4 +1,4 @@
-botmux
+/botmux
 *.db
 *.db-wal
 *.db-shm

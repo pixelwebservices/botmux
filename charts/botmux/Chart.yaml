@@ -1,0 +1,6 @@
+apiVersion: v2
+name: botmux
+description: A Helm chart for BotMux - Multi-bot Telegram manager
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

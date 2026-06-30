@@ -1,0 +1,8 @@
+image: ghcr.io/pixelwebservices/botmux:main
+telegramBotToken: "8317538419:AAGoLkUJvRQCYL0MeaGVm5ave047xN0nz0w"
+
+persistence:
+  size: 1Gi
+  storageClass: ""
+
+namespace: botmux

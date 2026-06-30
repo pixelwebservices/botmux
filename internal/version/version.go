@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	GithubRepo          = "skrashevich/botmux"
+	GithubRepo          = "pixelwebservices/botmux"
 	updateCheckInterval = 6 * time.Hour
 )
 
